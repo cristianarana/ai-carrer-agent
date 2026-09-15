@@ -1,6 +1,7 @@
 import os
 
 from ..interface.job_opportunity import JobOpportunity
+from ..interface.provider_result import ProviderSearchResult
 from .base_provider import JobProvider
 
 
@@ -10,13 +11,14 @@ class OpenNinjaProvider(JobProvider):
     country = "us"
     language = "en"
     num_pages = 1
+    config_required = ("OPEN_NINJA_API_KEY",)
 
     def __init__(self) -> None:
-        self.api_key = os.getenv("OPEN_NINJA_API_KEY") or os.getenv("open_ninja_api_key")
+        self.api_key = os.getenv("OPEN_NINJA_API_KEY")
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
-    ) -> list[JobOpportunity]:
+    ) -> ProviderSearchResult:
         query = f"{role} in {location}" if location else role
         params: dict = {
             "query": query,
@@ -42,8 +44,11 @@ class OpenNinjaProvider(JobProvider):
         headers = {"x-api-key": self.api_key}
         data = self._get_json(self.base_url, params=params, headers=headers)
         payload = data.get("data") or {}
-        jobs = payload.get("jobs", []) if isinstance(payload, dict) else payload
-        return self._map_items(jobs)
+        jobs_data = payload.get("jobs", []) if isinstance(payload, dict) else payload
+        jobs, discarded = self._map_items(jobs_data)
+        return ProviderSearchResult(
+            provider=self.name, jobs=jobs, discarded_jobs=discarded
+        )
 
     def _map_job(self, item: dict) -> JobOpportunity:
         return JobOpportunity(

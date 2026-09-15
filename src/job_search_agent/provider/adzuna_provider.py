@@ -1,6 +1,7 @@
 import os
 
 from ..interface.job_opportunity import JobOpportunity
+from ..interface.provider_result import ProviderSearchResult
 from .base_provider import JobProvider
 
 
@@ -9,14 +10,15 @@ class AdzunaProvider(JobProvider):
     base_url = "https://api.adzuna.com/v1/api/jobs"
     country = "gb"
     results_per_page = 20
+    config_required = ("ADZUNA_APP_ID", "ADZUNA_API_KEY")
 
     def __init__(self) -> None:
-        self.app_id = os.getenv("ADZUNA_APP_ID") or os.getenv("adzuna_app_id")
-        self.api_key = os.getenv("ADZUNA_API_KEY") or os.getenv("adzuna_api_key")
+        self.app_id = os.getenv("ADZUNA_APP_ID")
+        self.api_key = os.getenv("ADZUNA_API_KEY")
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
-    ) -> list[JobOpportunity]:
+    ) -> ProviderSearchResult:
         country = kwargs.get("country") or self.country
         page = kwargs.get("page", 1)
         url = f"{self.base_url}/{country}/search/{page}"
@@ -52,7 +54,10 @@ class AdzunaProvider(JobProvider):
         data = self._get_json(
             url, params=params, headers={"Accept": "application/json"}
         )
-        return self._map_items(data.get("results", []))
+        jobs, discarded = self._map_items(data.get("results", []))
+        return ProviderSearchResult(
+            provider=self.name, jobs=jobs, discarded_jobs=discarded
+        )
 
     def _map_job(self, item: dict) -> JobOpportunity:
         company = item.get("company") or {}

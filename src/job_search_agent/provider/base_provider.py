@@ -1,3 +1,4 @@
+import os
 import time
 
 import requests
@@ -7,6 +8,7 @@ from pydantic import ValidationError
 
 from ..interface.discarded_job import DiscardedJob
 from ..interface.job_opportunity import JobOpportunity
+from ..interface.provider_result import ProviderSearchResult
 
 load_dotenv()
 
@@ -29,25 +31,30 @@ class ProviderError(Exception):
 class JobProvider(ABC):
     name: str
     base_url: str
+    config_required: tuple[str, ...] = ()
     timeout = 15
     retries = 3
     backoff = 1.0
-    discarded_jobs: list[DiscardedJob] = []
+
+    def is_configured(self) -> bool:
+        return all(os.getenv(key) for key in self.config_required)
 
     @abstractmethod
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
-    ) -> list[JobOpportunity]:
+    ) -> ProviderSearchResult:
         raise NotImplementedError
 
-    def _map_items(self, items: list[dict]) -> list[JobOpportunity]:
-        self.discarded_jobs = []
+    def _map_items(
+        self, items: list[dict]
+    ) -> tuple[list[JobOpportunity], list[DiscardedJob]]:
         jobs: list[JobOpportunity] = []
+        discarded: list[DiscardedJob] = []
         for item in items:
             try:
                 jobs.append(self._map_job(item))
             except ValidationError as exc:
-                self.discarded_jobs.append(
+                discarded.append(
                     DiscardedJob(
                         provider=self.name,
                         source_title=item.get("title")
@@ -57,7 +64,7 @@ class JobProvider(ABC):
                         raw=item,
                     )
                 )
-        return jobs
+        return jobs, discarded
 
     def _get_json(
         self, url: str, params: dict | None = None, headers: dict | None = None

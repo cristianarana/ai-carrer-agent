@@ -1,7 +1,13 @@
 import pytest
 
 from job_search_agent.interface.job_opportunity import JobOpportunity
-from job_search_agent.provider import PROVIDERS, get_provider, get_providers, search_all
+from job_search_agent.interface.provider_result import ProviderSearchResult
+from job_search_agent.provider import (
+    build_providers,
+    get_provider,
+    get_providers,
+    search_all,
+)
 from job_search_agent.provider.base_provider import ProviderError
 
 
@@ -32,10 +38,13 @@ def _opportunity(title):
 
 
 def test_search_all_failover_with_structured_errors(monkeypatch):
-    by_name = {p.name: p for p in PROVIDERS}
+    providers = build_providers()
+    by_name = {p.name: p for p in providers}
 
     def ok(*args, **kwargs):
-        return [_opportunity("Job A")]
+        return ProviderSearchResult(
+            provider="adzuna", jobs=[_opportunity("Job A")], discarded_jobs=[]
+        )
 
     def boom(*args, **kwargs):
         raise ProviderError("open_ninja", "simulated network failure", status_code=500, transient=True)
@@ -47,7 +56,7 @@ def test_search_all_failover_with_structured_errors(monkeypatch):
     monkeypatch.setattr(by_name["adzuna"], "search_jobs", ok)
     monkeypatch.setattr(by_name["remotive"], "search_jobs", unexpected)
 
-    report = search_all("developer")
+    report = search_all("developer", providers=providers)
 
     assert report.role == "developer"
     assert report.location is None
@@ -61,7 +70,8 @@ def test_search_all_failover_with_structured_errors(monkeypatch):
 
 
 def test_search_all_harvests_discarded_jobs(monkeypatch):
-    by_name = {p.name: p for p in PROVIDERS}
+    providers = build_providers()
+    by_name = {p.name: p for p in providers}
 
     def fail(provider_name):
         def _fn(*a, **k):
@@ -88,7 +98,7 @@ def test_search_all_harvests_discarded_jobs(monkeypatch):
         lambda url, params=None, headers=None: payload,
     )
 
-    report = search_all("python developer")
+    report = search_all("python developer", providers=providers)
 
     assert len(report.jobs) == 1
     assert report.jobs[0].title == "Valid Role"
@@ -99,3 +109,16 @@ def test_search_all_harvests_discarded_jobs(monkeypatch):
     assert discarded[0].raw == {"title": "", "description": "x", "company": {"display_name": ""},
                                  "location": {"display_name": "Glasgow"}}
     assert report.errors["open_ninja"].startswith("open_ninja")
+
+
+def test_search_all_skips_unconfigured_providers(monkeypatch):
+    providers = build_providers()
+    for provider in providers:
+        monkeypatch.setattr(provider, "is_configured", lambda: False)
+
+    report = search_all("developer", providers=providers)
+
+    assert report.attempted_providers == []
+    assert report.jobs == []
+    assert set(report.skipped_providers) == {"open_ninja", "adzuna", "remotive"}
+    assert "ADZUNA_APP_ID" in report.skipped_providers["adzuna"]

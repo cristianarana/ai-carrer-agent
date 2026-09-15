@@ -4,31 +4,44 @@ from .base_provider import JobProvider, ProviderError
 from .open_ninja_provider import OpenNinjaProvider
 from .remotive_provider import RemotiveProvider
 
-PROVIDERS: list[JobProvider] = [
-    OpenNinjaProvider(),
-    AdzunaProvider(),
-    RemotiveProvider(),
-]
+
+def build_providers() -> list[JobProvider]:
+    return [OpenNinjaProvider(), AdzunaProvider(), RemotiveProvider()]
 
 
 def get_providers() -> list[JobProvider]:
-    return list(PROVIDERS)
+    return build_providers()
 
 
 def get_provider(name: str) -> JobProvider:
-    for provider in PROVIDERS:
+    for provider in build_providers():
         if provider.name == name:
             return provider
     raise ValueError(f"Unknown provider: {name}")
 
 
-def search_all(role: str, location: str | None = None, **kwargs) -> SearchReport:
+def search_all(
+    role: str,
+    location: str | None = None,
+    *,
+    skip_unconfigured: bool = True,
+    providers: list[JobProvider] | None = None,
+    **kwargs,
+) -> SearchReport:
     report = SearchReport(role=role, location=location)
-    for provider in PROVIDERS:
+    if providers is None:
+        providers = build_providers()
+    for provider in providers:
+        if skip_unconfigured and not provider.is_configured():
+            report.skipped_providers[provider.name] = (
+                "missing credentials: " + ", ".join(provider.config_required)
+            )
+            continue
         report.attempted_providers.append(provider.name)
         try:
-            report.jobs.extend(provider.search_jobs(role, location, **kwargs))
-            report.discarded_jobs[provider.name] = list(provider.discarded_jobs)
+            result = provider.search_jobs(role, location, **kwargs)
+            report.jobs.extend(result.jobs)
+            report.discarded_jobs[provider.name] = result.discarded_jobs
         except ProviderError as e:
             print(f"{provider.name} failed: {e}")
             report.errors[provider.name] = str(e)

@@ -2,16 +2,19 @@ import re
 from html import unescape
 
 from ..interface.job_opportunity import JobOpportunity
+from ..interface.provider_result import ProviderSearchResult
 from .base_provider import JobProvider
 
 
 class RemotiveProvider(JobProvider):
     name = "remotive"
     base_url = "https://remotive.com/api/remote-jobs"
+    # Rate limit oficial: ~2 req/min (recomienda pocas consultas/día).
+    # Los 429 se manejan como ProviderError no-transient (sin retry).
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
-    ) -> list[JobOpportunity]:
+    ) -> ProviderSearchResult:
         params: dict[str, str] = {}
         if role:
             params["search"] = role
@@ -20,7 +23,10 @@ class RemotiveProvider(JobProvider):
                 params[key] = str(kwargs[key])
 
         data = self._get_json(self.base_url, params=params)
-        return self._map_items(data.get("jobs", []))
+        jobs, discarded = self._map_items(data.get("jobs", []))
+        return ProviderSearchResult(
+            provider=self.name, jobs=jobs, discarded_jobs=discarded
+        )
 
     def _map_job(self, item: dict) -> JobOpportunity:
         return JobOpportunity(
@@ -32,7 +38,7 @@ class RemotiveProvider(JobProvider):
             salary_range=item.get("salary"),
             employment_type=item.get("job_type"),
             posted_date=item.get("publication_date"),
-            company_url=item.get("company_logo"),
+            company_url=None,
             apply_url=item.get("url"),
         )
 

@@ -41,7 +41,6 @@ REMOTIVE_ITEM = {
     "url": "https://remotive.com/remote-jobs/product/lead-developer-123",
     "title": "Lead Developer",
     "company_name": "Remotive",
-    "company_logo": "https://remotive.com/job/123/logo",
     "category": "Software Development",
     "tags": ["python", "fastapi"],
     "job_type": "full_time",
@@ -104,7 +103,7 @@ def test_remotive_maps_item():
     assert job.posted_date == "2020-02-15T10:23:26"
     assert job.apply_url == "https://remotive.com/remote-jobs/product/lead-developer-123"
     assert job.description == "Full HTML description"
-    assert job.company_url == "https://remotive.com/job/123/logo"
+    assert job.company_url is None
 
 
 def test_remotive_strips_html():
@@ -153,14 +152,14 @@ def test_ninja_request_params(monkeypatch):
         return {"data": {"jobs": [NINJA_ITEM]}}
 
     monkeypatch.setattr(provider, "_get_json", fake_get_json)
-    jobs = provider.search_jobs("developer", location="chicago", work_from_home=True)
+    result = provider.search_jobs("developer", location="chicago", work_from_home=True)
 
     assert captured["url"] == "https://api.openwebninja.com/jsearch/search-v2"
     assert captured["params"]["query"] == "developer in chicago"
     assert captured["params"]["work_from_home"] == "true"
     assert captured["params"]["country"] == "us"
     assert captured["headers"]["x-api-key"] == provider.api_key
-    assert len(jobs) == 1
+    assert len(result.jobs) == 1
 
 
 def test_remotive_request_params(monkeypatch):
@@ -173,8 +172,8 @@ def test_remotive_request_params(monkeypatch):
         return {"jobs": [REMOTIVE_ITEM]}
 
     monkeypatch.setattr(provider, "_get_json", fake_get_json)
-    jobs = provider.search_jobs("python", category="software-dev", limit=10)
+    result = provider.search_jobs("python", category="software-dev", limit=10)
 
     assert captured["url"] == "https://remotive.com/api/remote-jobs"
     assert captured["params"] == {"search": "python", "category": "software-dev", "limit": "10"}
-    assert len(jobs) == 1
+    assert len(result.jobs) == 1

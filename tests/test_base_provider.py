@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from requests import HTTPError, Timeout
 
 from job_search_agent.interface.job_opportunity import JobOpportunity
+from job_search_agent.interface.provider_result import ProviderSearchResult
 from job_search_agent.provider import base_provider as base
 from job_search_agent.provider.base_provider import JobProvider, ProviderError
 
@@ -14,7 +15,10 @@ class DummyProvider(JobProvider):
     base_url = "https://dummy.test/api"
 
     def search_jobs(self, role, location=None, **kwargs):
-        return self._map_items([])
+        jobs, discarded = self._map_items([])
+        return ProviderSearchResult(
+            provider=self.name, jobs=jobs, discarded_jobs=discarded
+        )
 
     def _map_job(self, item: dict) -> JobOpportunity:
         return JobOpportunity(
@@ -46,10 +50,12 @@ def _resp(payload, status_code=200):
 
 def test_map_items_valid_job():
     provider = DummyProvider()
-    jobs = provider._map_items([{"title": "Dev", "description": "desc", "company": "Acme", "location": "London"}])
+    jobs, discarded = provider._map_items(
+        [{"title": "Dev", "description": "desc", "company": "Acme", "location": "London"}]
+    )
     assert len(jobs) == 1
     assert jobs[0].title == "Dev"
-    assert provider.discarded_jobs == []
+    assert discarded == []
 
 
 def test_map_items_discards_invalid_keeps_valid():
@@ -58,23 +64,15 @@ def test_map_items_discards_invalid_keeps_valid():
         {"title": "", "description": "desc", "company": "Acme", "location": "London"},
         {"title": "Dev", "description": "desc", "company": "Acme", "location": "London"},
     ]
-    jobs = provider._map_items(items)
+    jobs, discarded = provider._map_items(items)
     assert len(jobs) == 1
     assert jobs[0].title == "Dev"
-    assert len(provider.discarded_jobs) == 1
-    discarded = provider.discarded_jobs[0]
-    assert discarded.provider == "dummy"
-    assert discarded.source_title == "unknown"
-    assert discarded.reasons
-    assert discarded.raw == items[0]
-
-
-def test_map_items_resets_discarded_between_calls():
-    provider = DummyProvider()
-    provider._map_items([{"title": "", "description": "desc", "company": "A", "location": "B"}])
-    assert len(provider.discarded_jobs) == 1
-    provider._map_items([{"title": "Ok", "description": "desc", "company": "A", "location": "B"}])
-    assert provider.discarded_jobs == []
+    assert len(discarded) == 1
+    discarded_job = discarded[0]
+    assert discarded_job.provider == "dummy"
+    assert discarded_job.source_title == "unknown"
+    assert discarded_job.reasons
+    assert discarded_job.raw == items[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -177,3 +175,28 @@ def test_salary_range_only_minimum():
 def test_salary_range_full():
     result = JobProvider._build_salary_range(50000, 55000, "GBP", "YEAR")
     assert result == "50000 - 55000 GBP YEAR"
+
+
+# --------------------------------------------------------------------------- #
+# is_configured
+# --------------------------------------------------------------------------- #
+
+def test_is_configured_true_without_required_vars():
+    assert DummyProvider().is_configured() is True
+
+
+def test_is_configured_false_when_env_missing(monkeypatch):
+    class ConfiguredProvider(DummyProvider):
+        config_required = ("FAKE_APP_ID", "FAKE_API_KEY")
+
+    monkeypatch.delenv("FAKE_APP_ID", raising=False)
+    monkeypatch.delenv("FAKE_API_KEY", raising=False)
+    assert ConfiguredProvider().is_configured() is False
+
+
+def test_is_configured_true_when_env_present(monkeypatch):
+    class ConfiguredProvider(DummyProvider):
+        config_required = ("FAKE_API_KEY",)
+
+    monkeypatch.setenv("FAKE_API_KEY", "secret")
+    assert ConfiguredProvider().is_configured() is True
