@@ -1,8 +1,12 @@
+import logging
+
 from ..interface.search_report import SearchReport
 from .adzuna_provider import AdzunaProvider
 from .base_provider import JobProvider, ProviderError
 from .open_ninja_provider import OpenNinjaProvider
 from .remotive_provider import RemotiveProvider
+
+logger = logging.getLogger(__name__)
 
 
 def build_providers() -> list[JobProvider]:
@@ -43,9 +47,9 @@ def search_all(
             report.jobs.extend(result.jobs)
             report.discarded_jobs[provider.name] = result.discarded_jobs
         except ProviderError as e:
-            print(f"{provider.name} failed: {e}")
+            logger.error("%s failed: %s", provider.name, e)
             report.errors[provider.name] = str(e)
         except Exception as e:
-            print(f"{provider.name} unexpected error: {e}")
+            logger.exception("%s unexpected error: %s", provider.name, e)
             report.errors[provider.name] = f"Unexpected: {e}"
     return report
