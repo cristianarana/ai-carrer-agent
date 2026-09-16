@@ -1,6 +1,7 @@
 import pytest
 
 from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis
+from job_search_agent.errors import NoMatchesError
 from job_search_agent.helper.keyword_scorer import KeywordScorer
 from job_search_agent.interface.job_opportunity import JobOpportunity
 from job_search_agent.interface.provider_result import ProviderSearchResult
@@ -194,5 +195,54 @@ def test_keyword_scorer_rejects_unrelated_job():
         apply_url="https://example.com/jobs/accountant",
     )
     provider = FakeProvider("fake_a", [job])
-    outcome = JobSearcher(providers=[provider]).search(_analysis())
-    assert outcome.matched_jobs == []
+    with pytest.raises(NoMatchesError) as exc_info:
+        JobSearcher(providers=[provider]).search(_analysis())
+    assert exc_info.value.reason == "none_above_threshold"
+    assert exc_info.value.summary.total_jobs_found == 1
+    assert exc_info.value.summary.total_matched_jobs == 0
+
+
+def test_no_matches_raises_when_no_jobs_found():
+    provider = FakeProvider("fake_a", [])
+    with pytest.raises(NoMatchesError) as exc_info:
+        JobSearcher(providers=[provider]).search(_analysis())
+    assert exc_info.value.reason == "no_jobs_found"
+    assert exc_info.value.summary.total_jobs_found == 0
+    assert exc_info.value.summary.had_results is False
+
+
+def test_summary_aggregates_providers():
+    broken = FakeProvider(
+        "b_broken", error=ProviderError("b_broken", "down", status_code=500)
+    )
+    skipped = FakeProvider("b_skipped", configured=False)
+    job = _job()
+    ok = FakeProvider("a_ok", [job])
+
+    outcome = JobSearcher(providers=[ok, broken, skipped]).search(_analysis())
+
+    summary = outcome.summary
+    assert summary.attempted_providers == ["a_ok", "b_broken"]
+    assert summary.failed_providers == ["b_broken"]
+    assert "b_skipped" in summary.skipped_providers
+    assert summary.had_errors is True
+    assert summary.had_results is True
+    assert summary.total_matched_jobs == 1
+
+
+def test_summary_counts_unique_jobs_across_roles():
+    job = _job()
+    outcome = JobSearcher(providers=[FakeProvider("a_ok", [job])]).search(_analysis())
+    summary = outcome.summary
+    assert summary.total_roles_searched == 20
+    assert summary.total_jobs_found == 1
+    assert summary.total_matched_jobs == 1
+
+
+def test_outcome_summary_populated_on_success():
+    outcome = JobSearcher(
+        providers=[FakeProvider("a_ok", [_job()])]
+    ).search(_analysis())
+    assert outcome.summary is not None
+    assert outcome.summary.had_results is True
+    assert outcome.summary.had_errors is False

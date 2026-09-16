@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 
@@ -9,6 +10,8 @@ from pydantic import ValidationError
 from ..interface.discarded_job import DiscardedJob
 from ..interface.job_opportunity import JobOpportunity
 from ..interface.provider_result import ProviderSearchResult
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -83,7 +86,7 @@ class JobProvider(ABC):
                 status = e.response.status_code
                 transient, cause = status >= 500, e
                 if not transient:
-                    print(f"{self.name} API error ({status}): {cause}")
+                    logger.error("%s API error (%s): %s", self.name, status, cause)
                     raise ProviderError(
                         self.name,
                         str(cause),
@@ -95,13 +98,16 @@ class JobProvider(ABC):
 
             if transient and attempt < self.retries:
                 wait = self.backoff * (2**attempt)
-                print(
-                    f"{self.name} transient error, retry in {wait:.1f}s "
-                    f"({attempt + 1}/{self.retries})"
+                logger.warning(
+                    "%s transient error, retry in %.1fs (%d/%d)",
+                    self.name,
+                    wait,
+                    attempt + 1,
+                    self.retries,
                 )
                 time.sleep(wait)
                 continue
-            print(f"{self.name} API error: {cause}")
+            logger.error("%s API error: %s", self.name, cause)
             raise ProviderError(self.name, str(cause), status_code=status) from cause
 
     @staticmethod

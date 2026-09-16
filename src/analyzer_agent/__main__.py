@@ -1,8 +1,11 @@
 import argparse
+import logging
 from pathlib import Path
 
 from .cv_analyzer import CVAnalyzer
 from .providers import MistralProvider
+
+logging.basicConfig(level=logging.INFO)
 
 
 def main(argv: list[str] | None = None) -> int:
