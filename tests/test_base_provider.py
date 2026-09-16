@@ -55,6 +55,7 @@ def test_map_items_valid_job():
     )
     assert len(jobs) == 1
     assert jobs[0].title == "Dev"
+    assert jobs[0].source_provider == "dummy"
     assert discarded == []
 
 

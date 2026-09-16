@@ -25,6 +25,12 @@ def test_valid_opportunity():
     assert job.requirements == ["python", "fastapi"]
     assert job.salary_range is None
     assert job.apply_url is None
+    assert job.source_provider is None
+
+
+def test_source_provider_preserved():
+    job = make(source_provider="adzuna")
+    assert job.source_provider == "adzuna"
 
 
 @pytest.mark.parametrize("field", ["title", "description", "location", "company"])

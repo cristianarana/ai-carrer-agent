@@ -1,5 +1,4 @@
 python-dotenv
-google-genai
 mistralai
 pydantic
 "fastapi[standard]"

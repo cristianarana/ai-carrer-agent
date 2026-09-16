@@ -52,7 +52,8 @@ class JobProvider(ABC):
         discarded: list[DiscardedJob] = []
         for item in items:
             try:
-                jobs.append(self._map_job(item))
+                job = self._map_job(item)
+                jobs.append(job.model_copy(update={"source_provider": self.name}))
             except ValidationError as exc:
                 discarded.append(
                     DiscardedJob(

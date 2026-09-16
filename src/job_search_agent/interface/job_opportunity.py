@@ -12,6 +12,7 @@ class JobOpportunity(BaseModel):
     posted_date: str | None = None
     company_url: str | None = None
     apply_url: str | None = None
+    source_provider: str | None = None
 
     _REQUIRED_NON_EMPTY = ("title", "description", "location", "company")
 
