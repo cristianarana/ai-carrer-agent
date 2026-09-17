@@ -1,0 +1,97 @@
+<div class="analysis-page">
+  <h2 class="page-title">Análisis de Curriculum</h2>
+
+  <section>
+    <h3 class="section-title">Mejores posiciones para tu perfil</h3>
+    <table class="report-table">
+      <thead>
+        <tr><th style="width:6%">Rank</th><th style="width:24%">Posición</th><th>Explicación del match</th></tr>
+      </thead>
+      <tbody>
+      {% for p in best_fit %}
+        <tr>
+          <td>{{ p.rank }}</td>
+          <td>{{ p.position }}</td>
+          <td>{{ p.match_explanation }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3 class="section-title">Keywords para optimización ATS</h3>
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th>Habilidades técnicas</th>
+          <th>Herramientas y tecnologías</th>
+          <th>Habilidades profesionales</th>
+          <th>AI &amp; Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><ul>{% for k in ats.technical_skills %}<li>{{ k }}</li>{% endfor %}</ul></td>
+          <td><ul>{% for k in ats.tools_and_technologies %}<li>{{ k }}</li>{% endfor %}</ul></td>
+          <td><ul>{% for k in ats.professional_skills %}<li>{{ k }}</li>{% endfor %}</ul></td>
+          <td><ul>{% for k in ats.ai_data_keywords %}<li>{{ k }}</li>{% endfor %}</ul></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3 class="section-title">Test de los 10 segundos del reclutador</h3>
+    <table class="report-table">
+      <tbody>
+        <tr>
+          <th style="width:30%">Positivo</th>
+          <td><ul>{% for item in recruiter.positive %}<li>{{ item }}</li>{% endfor %}</ul></td>
+        </tr>
+        <tr>
+          <th>Confuso o débil</th>
+          <td><ul>{% for item in recruiter.unclear_or_weak %}<li>{{ item }}</li>{% endfor %}</ul></td>
+        </tr>
+        <tr>
+          <th>Podría causar rechazo</th>
+          <td><ul>{% for item in recruiter.could_cause_rejection %}<li>{{ item }}</li>{% endfor %}</ul></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3 class="section-title">Puntuación del Curriculum</h3>
+    <p class="score-value">{{ score.overall_score }}/10</p>
+    <p>{{ score.explanation }}</p>
+    <table class="report-table">
+      <tbody>
+      {% for label, value in score_breakdown %}
+        <tr class="score-bar-row">
+          <td class="score-bar-label">{{ label }}</td>
+          <td>
+            <span class="score-bar-track"><span class="score-bar-fill" style="width: {{ value * 10 }}%"></span></span>
+            <span>{{ value }}/10</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h3 class="section-title">Cómo llegar a la excelencia (10/10)</h3>
+    {% for items, label in improvements %}
+      <h4 class="sub-section-title">{{ label }}</h4>
+      <ul>
+      {% for item in items %}
+        <li>
+          <span class="badge badge-{{ item.priority|lower }}">{{ item.priority }}</span>
+          {{ item.impact }}
+        </li>
+      {% endfor %}
+      </ul>
+    {% endfor %}
+  </section>
+</div>

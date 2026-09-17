@@ -11,6 +11,10 @@ from job_search_agent.provider.base_provider import ProviderError
 
 def _analysis() -> CVAnalysis:
     data = {
+        "CANDIDATE_PROFILE": {
+            "name": "Cristian Arana",
+            "professional_title": "Backend Software Engineer",
+        },
         "RECRUITMENT_REPORT": {
             "BEST_FIT_JOB_POSITIONS": [
                 {"rank": i + 1, "position": "Backend Engineer", "match_explanation": "x"}

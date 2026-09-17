@@ -3,6 +3,10 @@ Your previous response for the resume analysis failed validation.
 Required structure (field names MUST match exactly):
 
 {
+  "CANDIDATE_PROFILE": {
+    "name": str | null,
+    "professional_title": str | null
+  },
   "RECRUITMENT_REPORT": {
     "BEST_FIT_JOB_POSITIONS": [
       {"rank": int 1-20, "position": str, "match_explanation": str}

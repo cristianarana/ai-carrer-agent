@@ -21,6 +21,10 @@ class FakeProvider(LLMProvider):
 
 def _analysis_data() -> dict:
     return {
+        "CANDIDATE_PROFILE": {
+            "name": "Cristian Arana",
+            "professional_title": "Backend Software Engineer",
+        },
         "RECRUITMENT_REPORT": {
             "BEST_FIT_JOB_POSITIONS": [
                 {"rank": i + 1, "position": "Role", "match_explanation": "x"}
@@ -205,3 +209,34 @@ def test_analyze_raises_after_exhausting_attempts():
     provider = FakeProvider("{not valid json")
     with pytest.raises(InvalidJSONError):
         CVAnalyzer(provider=provider, max_attempts=3).analyze("CV")
+
+
+def test_candidate_profile_empty_values_normalized_to_none():
+    from analyzer_agent.interfaces.candidate_profile import CandidateProfile
+
+    profile = CandidateProfile.model_validate(
+        {"name": "   ", "professional_title": ""}
+    )
+    assert profile.name is None
+    assert profile.professional_title is None
+
+
+def test_candidate_profile_validation_short_name_raises():
+    from analyzer_agent.validation import CVAnalysisValidator
+    from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis
+
+    data = _analysis_data()
+    data["CANDIDATE_PROFILE"] = {"name": "A", "professional_title": "Dev"}
+    analysis = CVAnalysis.model_validate(data)
+    with pytest.raises(ValueError, match="CANDIDATE_PROFILE.name"):
+        CVAnalysisValidator.validate(analysis)
+
+
+def test_candidate_profile_missing_raises_validation_error():
+    from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis
+
+    data = _analysis_data()
+    del data["CANDIDATE_PROFILE"]
+    with pytest.raises(Exception) as exc_info:
+        CVAnalysis.model_validate(data)
+    assert "CANDIDATE_PROFILE" in str(exc_info.value)
