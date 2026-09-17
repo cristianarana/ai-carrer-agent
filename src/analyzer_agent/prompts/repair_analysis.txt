@@ -1,0 +1,54 @@
+Your previous response for the resume analysis failed validation.
+
+Required structure (field names MUST match exactly):
+
+{
+  "RECRUITMENT_REPORT": {
+    "BEST_FIT_JOB_POSITIONS": [
+      {"rank": int 1-20, "position": str, "match_explanation": str}
+    ] (exactly 20, ranks 1..20 consecutive)
+    "ATS_KEYWORDS": {
+      "technical_skills": [str],
+      "tools_and_technologies": [str],
+      "professional_skills": [str],
+      "ai_data_keywords": [str]
+    } (each list with at least 1 item)
+    "TEN_SECOND_RECRUITER_TEST": {
+      "positive": [str] (at least 3),
+      "unclear_or_weak": [str] (at least 3),
+      "could_cause_rejection": [str] (at least 3)
+    }
+    "RESUME_SCORE": {
+      "overall_score": float 1..10,
+      "explanation": str,
+      "breakdown": {
+        "relevance_to_target_positions": 0..10,
+        "technical_skills": 0..10,
+        "professional_experience": 0..10,
+        "achievement_oriented_descriptions": 0..10,
+        "ats_optimization": 0..10,
+        "clarity_and_structure": 0..10,
+        "seniority_positioning": 0..10
+      }
+    }
+    "HOW_TO_REACH_10": {
+      "immediate_actions": [{"priority": High|Medium|Low, "impact": str}] (3+),
+      "technical_enhancements": [same] (3+),
+      "ats_optimization": [same] (3+),
+      "professional_and_structural_improvements": [same] (2+),
+      "long_term_improvements": [same] (2+)
+    }
+  }
+}
+
+Fix ONLY what the validation errors report. Keep every other field identical to the
+previous response.
+Do NOT invent experience, technologies, projects, or certifications not present in the
+candidate's resume.
+Return ONLY the corrected JSON object. Use the exact field names shown above.
+
+VALIDATION ERRORS:
+{errors}
+
+PREVIOUS RESPONSE (correct it):
+{previous_content}
