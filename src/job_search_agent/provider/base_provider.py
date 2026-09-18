@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import time
 
 import requests
@@ -14,6 +15,34 @@ from ..interface.provider_result import ProviderSearchResult
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+
+class _RateLimiter:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._last_call = 0.0
+
+    def wait(self, min_interval: float) -> None:
+        with self._lock:
+            elapsed = time.monotonic() - self._last_call
+            if elapsed < min_interval:
+                time.sleep(min_interval - elapsed)
+            self._last_call = time.monotonic()
+
+
+_RATE_LIMITERS: dict[str, _RateLimiter] = {}
+_RATE_LIMITERS_GUARD = threading.Lock()
+
+
+def _wait_for_rate_limit(name: str, min_interval: float) -> None:
+    if min_interval <= 0.0:
+        return
+    with _RATE_LIMITERS_GUARD:
+        limiter = _RATE_LIMITERS.get(name)
+        if limiter is None:
+            limiter = _RateLimiter()
+            _RATE_LIMITERS[name] = limiter
+    limiter.wait(min_interval)
 
 
 class ProviderError(Exception):
@@ -38,6 +67,8 @@ class JobProvider(ABC):
     timeout = 15
     retries = 3
     backoff = 1.0
+    min_interval_seconds = 0.0
+    search_mode = "per_position"
 
     def is_configured(self) -> bool:
         return all(os.getenv(key) for key in self.config_required)
@@ -74,6 +105,7 @@ class JobProvider(ABC):
         self, url: str, params: dict | None = None, headers: dict | None = None
     ) -> dict:
         for attempt in range(self.retries + 1):
+            _wait_for_rate_limit(self.name, self.min_interval_seconds)
             try:
                 response = requests.get(
                     url, params=params, headers=headers, timeout=self.timeout

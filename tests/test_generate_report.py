@@ -1,4 +1,8 @@
+from pathlib import Path
+
+import pytest
 from pypdf import PdfReader
+from weasyprint import HTML
 
 from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis
 from job_search_agent.interface.job_match import (
@@ -7,16 +11,22 @@ from job_search_agent.interface.job_match import (
     JobSearchSummary,
 )
 from job_search_agent.interface.job_opportunity import JobOpportunity
+from pdf_report.errors import (
+    InvalidOutputPathError,
+    InvalidPDFOutputError,
+    MissingReportDataError,
+    PDFRenderError,
+)
 from pdf_report.generate_report import ReportGenerator
 
 
-def _analysis_data(name=None, title=None) -> dict:
+def _analysis_data(name=None, title=None, positions: int = 20) -> dict:
     return {
         "CANDIDATE_PROFILE": {"name": name, "professional_title": title},
         "RECRUITMENT_REPORT": {
             "BEST_FIT_JOB_POSITIONS": [
                 {"rank": i + 1, "position": f"Position {i}", "match_explanation": "x"}
-                for i in range(20)
+                for i in range(positions)
             ],
             "ATS_KEYWORDS": {
                 "technical_skills": ["python", "fastapi"],
@@ -158,3 +168,129 @@ def test_generate_report_job_table_columns(tmp_path):
         assert expected in last
     assert "Acme Corp" in last
     assert "remotive" in last
+
+
+def test_generate_report_missing_summary(tmp_path):
+    outcome = _outcome().model_copy(update={"summary": None})
+    with pytest.raises(MissingReportDataError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=outcome,
+            output_path=tmp_path / "report.pdf",
+        )
+
+
+def test_generate_report_empty_positions(tmp_path):
+    analysis = CVAnalysis.model_validate(_analysis_data(positions=0))
+    with pytest.raises(MissingReportDataError):
+        ReportGenerator().generate(
+            analysis=analysis,
+            job_search=_outcome(),
+            output_path=tmp_path / "report.pdf",
+        )
+
+
+def test_generate_report_rejects_unexpected_input(tmp_path):
+    with pytest.raises(MissingReportDataError):
+        ReportGenerator().generate(
+            analysis=None,
+            job_search=_outcome(),
+            output_path=tmp_path / "report.pdf",
+        )
+    with pytest.raises(MissingReportDataError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search={},
+            output_path=tmp_path / "report.pdf",
+        )
+
+
+def test_generate_report_appends_pdf_extension(tmp_path):
+    path = ReportGenerator().generate(
+        analysis=_analysis("Cristian Arana", "Backend Software Engineer"),
+        job_search=_outcome(),
+        output_path=tmp_path / "report",
+    )
+    assert path.name == "report.pdf"
+    assert path.read_bytes().startswith(b"%PDF")
+
+
+def test_generate_report_rejects_non_pdf_extension(tmp_path):
+    with pytest.raises(InvalidOutputPathError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=tmp_path / "report.doc",
+        )
+
+
+def test_generate_report_rejects_invalid_output_path(tmp_path):
+    with pytest.raises(InvalidOutputPathError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=None,
+        )
+    with pytest.raises(InvalidOutputPathError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=12345,
+        )
+
+
+def test_generate_report_unwritable_output_path(tmp_path):
+    blocker = tmp_path / "blocker.txt"
+    blocker.write_bytes(b"x")
+    with pytest.raises(InvalidOutputPathError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=blocker / "report.pdf",
+        )
+
+
+def test_generate_report_wraps_render_error(tmp_path, monkeypatch):
+    def _boom(self, target):
+        raise RuntimeError("boom interno")
+
+    monkeypatch.setattr(HTML, "write_pdf", _boom)
+    with pytest.raises(PDFRenderError) as excinfo:
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=tmp_path / "report.pdf",
+        )
+    assert "boom interno" in str(excinfo.value)
+    assert "Traceback" not in str(excinfo.value)
+
+
+def test_generate_report_invalid_pdf_output(tmp_path, monkeypatch):
+    def _write_garbage(self, target):
+        Path(target).write_bytes(b"this is not a pdf")
+
+    monkeypatch.setattr(HTML, "write_pdf", _write_garbage)
+    with pytest.raises(InvalidPDFOutputError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=tmp_path / "report.pdf",
+        )
+
+
+def test_generate_report_rejects_empty_pdf(tmp_path, monkeypatch):
+    class FakeReader:
+        def __init__(self, *args, **kwargs):
+            self.pages = []
+
+    def _write_header_only(self, target):
+        Path(target).write_bytes(b"%PDF-1.4\n")
+
+    monkeypatch.setattr(HTML, "write_pdf", _write_header_only)
+    monkeypatch.setattr("pdf_report.generate_report.PdfReader", FakeReader)
+    with pytest.raises(InvalidPDFOutputError):
+        ReportGenerator().generate(
+            analysis=_analysis(),
+            job_search=_outcome(),
+            output_path=tmp_path / "report.pdf",
+        )

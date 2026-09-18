@@ -15,3 +15,7 @@ class ResumeTooLargeError(AnalysisError):
         self.size = size
         self.limit = limit
         super().__init__(f"Resume text exceeds the {limit}-char limit ({size} chars)")
+
+
+class EmptyResumeError(AnalysisError):
+    pass

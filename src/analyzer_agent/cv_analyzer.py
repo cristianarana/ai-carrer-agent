@@ -5,7 +5,12 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .errors import AnalysisValidationError, InvalidJSONError, ResumeTooLargeError
+from .errors import (
+    AnalysisValidationError,
+    EmptyResumeError,
+    InvalidJSONError,
+    ResumeTooLargeError,
+)
 from .interfaces.ai_analyzer_response import CVAnalysis
 from .providers import LLMProvider
 from .validation import CVAnalysisValidator
@@ -32,6 +37,12 @@ class CVAnalyzer:
         self._max_resume_chars = max_resume_chars
 
     def analyze(self, resume_text: str) -> CVAnalysis:
+        if not resume_text.strip() or not any(
+            ch.isalnum() for ch in resume_text
+        ):
+            raise EmptyResumeError(
+                "The resume text is empty or contains no textual content"
+            )
         if len(resume_text) > self._max_resume_chars:
             raise ResumeTooLargeError(len(resume_text), self._max_resume_chars)
 

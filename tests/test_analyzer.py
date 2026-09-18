@@ -240,3 +240,30 @@ def test_candidate_profile_missing_raises_validation_error():
     with pytest.raises(Exception) as exc_info:
         CVAnalysis.model_validate(data)
     assert "CANDIDATE_PROFILE" in str(exc_info.value)
+
+
+def test_empty_resume_raises():
+    from analyzer_agent.errors import EmptyResumeError
+
+    with pytest.raises(EmptyResumeError):
+        CVAnalyzer(provider=FakeProvider("{}")).analyze("")
+
+
+def test_whitespace_only_resume_raises():
+    from analyzer_agent.errors import EmptyResumeError
+
+    with pytest.raises(EmptyResumeError):
+        CVAnalyzer(provider=FakeProvider("{}")).analyze("   \n\t  ")
+
+
+def test_resume_without_text_content_raises():
+    from analyzer_agent.errors import EmptyResumeError
+
+    with pytest.raises(EmptyResumeError):
+        CVAnalyzer(provider=FakeProvider("{}")).analyze("--- *** ###")
+
+
+def test_valid_resume_does_not_raise_empty_error():
+    provider = FakeProvider(json.dumps(_analysis_data()))
+    analysis = CVAnalyzer(provider=provider).analyze("Sensible resume content")
+    assert analysis.CANDIDATE_PROFILE is not None

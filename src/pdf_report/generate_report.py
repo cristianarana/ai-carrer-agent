@@ -48,7 +48,15 @@ import weasyprint  # noqa: E402
 
 from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis  # noqa: E402
 from job_search_agent.interface.job_match import JobSearchOutcome  # noqa: E402
+from pypdf import PdfReader  # noqa: E402
 
+from .errors import (
+    InvalidOutputPathError,
+    InvalidPDFOutputError,
+    MissingReportDataError,
+    PDFRenderError,
+    ReportError,
+)  # noqa: E402
 from .interface.job_market_row import build_job_rows  # noqa: E402
 
 _environment = jinja2.Environment(
@@ -69,17 +77,95 @@ class ReportGenerator:
         job_search: JobSearchOutcome,
         output_path: str | Path,
     ) -> Path:
-        pages = self._build_pages(analysis, job_search)
-        document = self._render("base.html.j2", **pages)
-        path = Path(output_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        weasyprint.HTML(string=document, base_url=str(STYLE_DIR)).write_pdf(str(path))
+        if not isinstance(analysis, CVAnalysis) or not isinstance(
+            job_search, JobSearchOutcome
+        ):
+            raise MissingReportDataError(
+                "A valid CVAnalysis and JobSearchOutcome are required to "
+                "generate the report."
+            )
+        path = self._normalize_output_path(output_path)
+
+        try:
+            pages = self._build_pages(analysis, job_search)
+            document = self._render("base.html.j2", **pages)
+        except ReportError:
+            raise
+        except Exception as exc:
+            raise PDFRenderError(f"Failed to render the report: {exc}") from exc
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise InvalidOutputPathError(
+                f"Cannot create the report directory {path.parent}: {exc}"
+            ) from exc
+
+        try:
+            weasyprint.HTML(string=document, base_url=str(STYLE_DIR)).write_pdf(
+                str(path)
+            )
+        except Exception as exc:
+            raise PDFRenderError(f"Failed to generate the PDF at {path}: {exc}") from exc
+
+        self._validate_pdf_output(path)
         return path
+
+    @staticmethod
+    def _normalize_output_path(output_path: str | Path) -> Path:
+        if isinstance(output_path, str):
+            output_path = Path(output_path)
+        if not isinstance(output_path, Path) or not output_path.name:
+            raise InvalidOutputPathError(
+                f"A valid output path for the report is required, got {output_path!r}"
+            )
+        if not output_path.suffix:
+            output_path = output_path.with_suffix(".pdf")
+        elif output_path.suffix.lower() != ".pdf":
+            raise InvalidOutputPathError(
+                f"The report must be saved as .pdf, got {output_path!r}"
+            )
+        return output_path
+
+    @staticmethod
+    def _validate_pdf_output(path: Path) -> None:
+        try:
+            if not path.exists() or path.stat().st_size == 0:
+                raise InvalidPDFOutputError(
+                    f"The generated report is missing or empty: {path}"
+                )
+            with path.open("rb") as fh:
+                header = fh.read(4)
+            if header != b"%PDF":
+                raise InvalidPDFOutputError(
+                    f"The generated document is not a valid PDF: {path}"
+                )
+            reader = PdfReader(str(path))
+            if not reader.pages:
+                raise InvalidPDFOutputError(
+                    f"The generated document contains no pages: {path}"
+                )
+        except InvalidPDFOutputError:
+            raise
+        except Exception as exc:
+            raise InvalidPDFOutputError(
+                f"Failed to read the generated PDF: {exc}"
+            ) from exc
 
     @classmethod
     def _build_pages(cls, analysis: CVAnalysis, job_search: JobSearchOutcome) -> dict:
         candidate = analysis.CANDIDATE_PROFILE
         report = analysis.RECRUITMENT_REPORT
+
+        if not report.BEST_FIT_JOB_POSITIONS:
+            raise MissingReportDataError(
+                "The analysis must contain at least one target position "
+                "(BEST_FIT_JOB_POSITIONS) to generate the report."
+            )
+        if job_search.summary is None:
+            raise MissingReportDataError(
+                "The search outcome must include a summary to generate the report."
+            )
 
         cover_title = (
             candidate.name
