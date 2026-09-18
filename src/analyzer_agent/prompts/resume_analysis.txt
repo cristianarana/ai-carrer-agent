@@ -11,7 +11,11 @@ field names.
 
 RECRUITMENT REPORT STRUCTURE:
 
-{{
+{{ 
+  "CANDIDATE_PROFILE": {{
+    "name": "Full name written in the resume, or null",
+    "professional_title": "Professional title written in the resume, or null"
+  }},
   "RECRUITMENT_REPORT": {{
     "BEST_FIT_JOB_POSITIONS": [
       {{
@@ -80,6 +84,12 @@ RECRUITMENT REPORT STRUCTURE:
 }}
 
 INSTRUCTIONS:
+
+0. CANDIDATE_PROFILE
+   Extract the candidate's full name and professional title EXACTLY as written in
+   the resume. Use null when the resume does not contain them. Do not infer,
+   translate, or embellish them. A professional title is the concise headline
+   that describes the candidate (e.g. "Backend Software Engineer").
 
 1. BEST_FIT_JOB_POSITIONS
    Identify exactly 20 job positions that match the candidate's current

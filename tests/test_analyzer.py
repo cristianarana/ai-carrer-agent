@@ -3,7 +3,11 @@ import json
 import pytest
 
 from analyzer_agent.cv_analyzer import CVAnalyzer
-from analyzer_agent.errors import AnalysisValidationError, InvalidJSONError
+from analyzer_agent.errors import (
+    AnalysisValidationError,
+    InvalidJSONError,
+    ResumeTooLargeError,
+)
 from analyzer_agent.providers import LLMProvider
 
 
@@ -17,6 +21,10 @@ class FakeProvider(LLMProvider):
 
 def _analysis_data() -> dict:
     return {
+        "CANDIDATE_PROFILE": {
+            "name": "Cristian Arana",
+            "professional_title": "Backend Software Engineer",
+        },
         "RECRUITMENT_REPORT": {
             "BEST_FIT_JOB_POSITIONS": [
                 {"rank": i + 1, "position": "Role", "match_explanation": "x"}
@@ -104,3 +112,158 @@ def test_analyze_builds_prompt_with_resume_text():
     assert "RECRUITMENT REPORT STRUCTURE" in seen["prompt"]
     assert "MY CANDIDATE CV" in seen["prompt"]
     assert seen["prompt"].endswith("MY CANDIDATE CV")
+
+
+def test_analyze_resume_exceeding_limit_raises_and_skips_provider():
+    calls = []
+
+    class CountingProvider(LLMProvider):
+        def generate_json(self, prompt: str) -> str:
+            calls.append(prompt)
+            return json.dumps(_analysis_data())
+
+    analyzer = CVAnalyzer(provider=CountingProvider(), max_resume_chars=10)
+
+    with pytest.raises(ResumeTooLargeError):
+        analyzer.analyze("x" * 11)
+
+    assert calls == []
+
+
+def test_analyze_resume_within_limit_ok(capsys):
+    provider = FakeProvider(json.dumps(_analysis_data()))
+    result = CVAnalyzer(provider=provider).analyze("x" * 10)
+    assert result.RECRUITMENT_REPORT.RESUME_SCORE.overall_score == 7.5
+
+
+def test_analyze_repair_on_second_attempt_without_resume():
+    seen = []
+
+    class RepairingProvider(LLMProvider):
+        def generate_json(self, prompt: str) -> str:
+            seen.append(prompt)
+            if len(seen) == 1:
+                data = _analysis_data()
+                data["RECRUITMENT_REPORT"]["BEST_FIT_JOB_POSITIONS"] = data[
+                    "RECRUITMENT_REPORT"
+                ]["BEST_FIT_JOB_POSITIONS"][:1]
+                return json.dumps(data)
+            return json.dumps(_analysis_data())
+
+    CVAnalyzer(provider=RepairingProvider(), max_attempts=3).analyze(
+        "MY CANDIDATE CV"
+    )
+
+    assert len(seen) == 2
+    assert "MY CANDIDATE CV" in seen[0]
+    assert "MY CANDIDATE CV" not in seen[1]
+
+
+def test_analyze_repair_prompt_contains_validation_errors():
+    seen = []
+
+    class RepairingProvider(LLMProvider):
+        def generate_json(self, prompt: str) -> str:
+            seen.append(prompt)
+            if len(seen) == 1:
+                data = _analysis_data()
+                data["RECRUITMENT_REPORT"]["BEST_FIT_JOB_POSITIONS"] = data[
+                    "RECRUITMENT_REPORT"
+                ]["BEST_FIT_JOB_POSITIONS"][:1]
+                return json.dumps(data)
+            return json.dumps(_analysis_data())
+
+    CVAnalyzer(provider=RepairingProvider(), max_attempts=2).analyze("CV")
+
+    assert "VALIDATION ERRORS" in seen[1]
+    assert "BEST_FIT_JOB_POSITIONS" in seen[1]
+
+
+def test_extract_json_strips_code_fences():
+    raw = "```json\n" + json.dumps(_analysis_data()) + "\n```"
+    assert CVAnalyzer._extract_json(raw)["RECRUITMENT_REPORT"]["RESUME_SCORE"][
+        "overall_score"
+    ] == 7.5
+
+
+def test_extract_json_surrounding_text():
+    raw = "Sure, here you go: " + json.dumps(_analysis_data()) + " Regards"
+    data = CVAnalyzer._extract_json(raw)
+    assert data["RECRUITMENT_REPORT"]["RESUME_SCORE"]["overall_score"] == 7.5
+
+
+def test_analyze_fenced_output_succeeds_first_attempt():
+    seen = []
+
+    class FencedProvider(LLMProvider):
+        def generate_json(self, prompt: str) -> str:
+            seen.append(prompt)
+            return "```json\n" + json.dumps(_analysis_data()) + "\n```"
+
+    CVAnalyzer(provider=FencedProvider()).analyze("CV")
+
+    assert len(seen) == 1
+
+
+def test_analyze_raises_after_exhausting_attempts():
+    provider = FakeProvider("{not valid json")
+    with pytest.raises(InvalidJSONError):
+        CVAnalyzer(provider=provider, max_attempts=3).analyze("CV")
+
+
+def test_candidate_profile_empty_values_normalized_to_none():
+    from analyzer_agent.interfaces.candidate_profile import CandidateProfile
+
+    profile = CandidateProfile.model_validate(
+        {"name": "   ", "professional_title": ""}
+    )
+    assert profile.name is None
+    assert profile.professional_title is None
+
+
+def test_candidate_profile_validation_short_name_raises():
+    from analyzer_agent.validation import CVAnalysisValidator
+    from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis
+
+    data = _analysis_data()
+    data["CANDIDATE_PROFILE"] = {"name": "A", "professional_title": "Dev"}
+    analysis = CVAnalysis.model_validate(data)
+    with pytest.raises(ValueError, match="CANDIDATE_PROFILE.name"):
+        CVAnalysisValidator.validate(analysis)
+
+
+def test_candidate_profile_missing_raises_validation_error():
+    from analyzer_agent.interfaces.ai_analyzer_response import CVAnalysis
+
+    data = _analysis_data()
+    del data["CANDIDATE_PROFILE"]
+    with pytest.raises(Exception) as exc_info:
+        CVAnalysis.model_validate(data)
+    assert "CANDIDATE_PROFILE" in str(exc_info.value)
+
+
+def test_empty_resume_raises():
+    from analyzer_agent.errors import EmptyResumeError
+
+    with pytest.raises(EmptyResumeError):
+        CVAnalyzer(provider=FakeProvider("{}")).analyze("")
+
+
+def test_whitespace_only_resume_raises():
+    from analyzer_agent.errors import EmptyResumeError
+
+    with pytest.raises(EmptyResumeError):
+        CVAnalyzer(provider=FakeProvider("{}")).analyze("   \n\t  ")
+
+
+def test_resume_without_text_content_raises():
+    from analyzer_agent.errors import EmptyResumeError
+
+    with pytest.raises(EmptyResumeError):
+        CVAnalyzer(provider=FakeProvider("{}")).analyze("--- *** ###")
+
+
+def test_valid_resume_does_not_raise_empty_error():
+    provider = FakeProvider(json.dumps(_analysis_data()))
+    analysis = CVAnalyzer(provider=provider).analyze("Sensible resume content")
+    assert analysis.CANDIDATE_PROFILE is not None

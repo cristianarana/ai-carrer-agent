@@ -3,3 +3,6 @@ mistralai
 pydantic
 "fastapi[standard]"
 requests
+weasyprint
+jinja2
+pypdf

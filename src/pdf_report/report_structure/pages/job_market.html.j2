@@ -1,0 +1,57 @@
+<div class="job-market-page">
+  <h2 class="page-title">Analizador de mercado laboral</h2>
+
+  <table class="report-table summary-stats">
+    <thead>
+      <tr>
+        <th>Oportunidades encontradas</th>
+        <th>Coincidencias</th>
+        <th>Proveedores consultados</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ summary.total_jobs_found }}</td>
+        <td>{{ summary.total_matched_jobs }}</td>
+        <td>{{ summary.attempted_providers|join(", ") or "ninguno" }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if summary.had_errors %}
+    <p class="meta">Nota: algunos proveedores reportaron errores durante la búsqueda.</p>
+  {% endif %}
+
+  <table class="report-table">
+    <thead>
+      <tr>
+        <th>Posición objetivo</th>
+        <th>Título</th>
+        <th>Empresa</th>
+        <th>Ubicación</th>
+        <th>Salario</th>
+        <th>Tipo</th>
+        <th>Match</th>
+        <th>Fuente</th>
+        <th>Publicado</th>
+        <th>Postular</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.role }}</td>
+        <td>{{ r.title }}</td>
+        <td>{{ r.company }}</td>
+        <td>{{ r.location }}</td>
+        <td>{{ r.salary_range or "—" }}</td>
+        <td>{{ r.employment_type or "—" }}</td>
+        <td>{{ "%.0f"|format(r.match_score * 100) }}%</td>
+        <td>{{ r.source_provider or "—" }}</td>
+        <td>{{ r.posted_date or "—" }}</td>
+        <td>{% if r.apply_url %}<a href="{{ r.apply_url }}">Postular</a>{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

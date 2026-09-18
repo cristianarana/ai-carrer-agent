@@ -11,6 +11,7 @@ class AdzunaProvider(JobProvider):
     country = "gb"
     results_per_page = 20
     config_required = ("ADZUNA_APP_ID", "ADZUNA_API_KEY")
+    min_interval_seconds = 0.5
 
     def __init__(self) -> None:
         self.app_id = os.getenv("ADZUNA_APP_ID")

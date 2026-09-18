@@ -85,6 +85,35 @@ def test_get_json_success(monkeypatch):
     assert DummyProvider()._get_json("https://dummy.test") == {"ok": 1}
 
 
+def test_get_json_rate_limiter_spaces_calls(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(base.requests, "get", lambda url, **kw: _resp({"ok": 1}))
+    monkeypatch.setattr(base.time, "sleep", lambda s: sleeps.append(s))
+
+    provider = DummyProvider()
+    provider.min_interval_seconds = 1.0
+    url = "https://dummy.test"
+
+    provider._get_json(url)
+    provider._get_json(url)
+
+    assert sleeps, "expected the rate limiter to sleep between calls"
+    assert 0.9 < sleeps[0] < 1.1
+
+
+def test_get_json_no_sleep_when_interval_zero(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(base.requests, "get", lambda url, **kw: _resp({"ok": 1}))
+    monkeypatch.setattr(base.time, "sleep", lambda s: sleeps.append(s))
+
+    provider = DummyProvider()
+    provider.min_interval_seconds = 0.0
+    provider._get_json("https://dummy.test")
+    provider._get_json("https://dummy.test")
+
+    assert sleeps == []
+
+
 def test_get_json_retries_transient_then_success(monkeypatch):
     attempts = {"n": 0}
 

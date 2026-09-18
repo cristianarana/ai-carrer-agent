@@ -11,6 +11,7 @@ class RemotiveProvider(JobProvider):
     base_url = "https://remotive.com/api/remote-jobs"
     # Rate limit oficial: ~2 req/min (recomienda pocas consultas/día).
     # Los 429 se manejan como ProviderError no-transient (sin retry).
+    search_mode = "profile"
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
