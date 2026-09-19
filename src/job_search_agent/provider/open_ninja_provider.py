@@ -1,8 +1,11 @@
+import logging
 import os
 
 from ..interface.job_opportunity import JobOpportunity
 from ..interface.provider_result import ProviderSearchResult
-from .base_provider import JobProvider
+from .base_provider import JobProvider, _env_int
+
+logger = logging.getLogger(__name__)
 
 
 class OpenNinjaProvider(JobProvider):
@@ -10,11 +13,26 @@ class OpenNinjaProvider(JobProvider):
     base_url = "https://api.openwebninja.com/jsearch/search-v2"
     country = "us"
     language = "en"
-    num_pages = 1
+    num_pages = _env_int("OPEN_NINJA_NUM_PAGES", 1)
     config_required = ("OPEN_NINJA_API_KEY",)
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        num_pages: int | None = None,
+        timeout: float | None = None,
+        retries: int | None = None,
+        backoff: float | None = None,
+        min_interval_seconds: float | None = None,
+    ) -> None:
+        super().__init__(
+            timeout=timeout,
+            retries=retries,
+            backoff=backoff,
+            min_interval_seconds=min_interval_seconds,
+        )
         self.api_key = os.getenv("OPEN_NINJA_API_KEY")
+        self.num_pages = num_pages if num_pages is not None else type(self).num_pages
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
@@ -42,10 +60,19 @@ class OpenNinjaProvider(JobProvider):
                 params[key] = str(value).lower() if isinstance(value, bool) else value
 
         headers = {"x-api-key": self.api_key}
+        logger.info(
+            "job search role=%r location=%s provider=open_ninja num_pages=%d",
+            role,
+            location,
+            params["num_pages"],
+        )
         data = self._get_json(self.base_url, params=params, headers=headers)
         payload = data.get("data") or {}
         jobs_data = payload.get("jobs", []) if isinstance(payload, dict) else payload
         jobs, discarded = self._map_items(jobs_data)
+        logger.debug(
+            "open_ninja mapped jobs=%d discarded=%d", len(jobs), len(discarded)
+        )
         return ProviderSearchResult(
             provider=self.name, jobs=jobs, discarded_jobs=discarded
         )

@@ -1,5 +1,6 @@
 import logging
 
+from core.config import Settings
 from ..interface.search_report import SearchReport
 from .adzuna_provider import AdzunaProvider
 from .base_provider import JobProvider, ProviderError
@@ -9,8 +10,30 @@ from .remotive_provider import RemotiveProvider
 logger = logging.getLogger(__name__)
 
 
-def build_providers() -> list[JobProvider]:
-    return [OpenNinjaProvider(), AdzunaProvider(), RemotiveProvider()]
+def build_providers(settings: Settings | None = None) -> list[JobProvider]:
+    if settings is None:
+        return [OpenNinjaProvider(), AdzunaProvider(), RemotiveProvider()]
+    network = {
+        "timeout": settings.search_provider_timeout,
+        "retries": settings.search_provider_retries,
+        "backoff": settings.search_provider_backoff,
+    }
+    return [
+        OpenNinjaProvider(
+            num_pages=settings.open_ninja_num_pages,
+            min_interval_seconds=settings.search_provider_min_interval,
+            **network,
+        ),
+        AdzunaProvider(
+            results_per_page=settings.adzuna_results_per_page,
+            min_interval_seconds=settings.adzuna_min_interval,
+            **network,
+        ),
+        RemotiveProvider(
+            min_interval_seconds=settings.search_provider_min_interval,
+            **network,
+        ),
+    ]
 
 
 def get_providers() -> list[JobProvider]:
@@ -46,10 +69,40 @@ def search_all(
             result = provider.search_jobs(role, location, **kwargs)
             report.jobs.extend(result.jobs)
             report.discarded_jobs[provider.name] = result.discarded_jobs
+            logger.info(
+                "job search ok provider=%s role=%r location=%s jobs=%d discarded=%d",
+                provider.name,
+                role,
+                location,
+                len(result.jobs),
+                len(result.discarded_jobs),
+            )
         except ProviderError as e:
             logger.error("%s failed: %s", provider.name, e)
             report.errors[provider.name] = str(e)
+            logger.info(
+                "job search failed provider=%s role=%r location=%s error=%s",
+                provider.name,
+                role,
+                location,
+                e,
+            )
         except Exception as e:
             logger.exception("%s unexpected error: %s", provider.name, e)
             report.errors[provider.name] = f"Unexpected: {e}"
+            logger.info(
+                "job search unexpected provider=%s role=%r location=%s error=%s",
+                provider.name,
+                role,
+                location,
+                e,
+            )
+    logger.info(
+        "job search end role=%r location=%s providers=%s failed=%s skipped=%s",
+        role,
+        location,
+        list(report.attempted_providers),
+        list(report.errors),
+        list(report.skipped_providers),
+    )
     return report

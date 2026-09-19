@@ -133,6 +133,11 @@ IMPORTANT RULES:
 - Follow the JSON structure EXACTLY as shown above.
 - Do NOT omit any field or category.
 - All lists must contain at least the minimum number of items specified.
+- Write ALL report content (positions, match explanations, ATS keywords,
+  recruiter test items, score explanation, and improvement impacts) entirely
+  in ENGLISH, regardless of the language of the resume.
+- Do NOT translate the candidate's name or professional title; keep them exactly
+  as written in the resume.
 
 CANDIDATE RESUME:
 

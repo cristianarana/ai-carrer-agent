@@ -1,21 +1,43 @@
+import logging
 import os
 
 from ..interface.job_opportunity import JobOpportunity
 from ..interface.provider_result import ProviderSearchResult
-from .base_provider import JobProvider
+from .base_provider import JobProvider, _env_float, _env_int
+
+logger = logging.getLogger(__name__)
 
 
 class AdzunaProvider(JobProvider):
     name = "adzuna"
     base_url = "https://api.adzuna.com/v1/api/jobs"
     country = "gb"
-    results_per_page = 20
+    results_per_page = _env_int("ADZUNA_RESULTS_PER_PAGE", 20)
     config_required = ("ADZUNA_APP_ID", "ADZUNA_API_KEY")
-    min_interval_seconds = 0.5
+    min_interval_seconds = _env_float("ADZUNA_MIN_INTERVAL", 0.5)
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        results_per_page: int | None = None,
+        min_interval_seconds: float | None = None,
+        timeout: float | None = None,
+        retries: int | None = None,
+        backoff: float | None = None,
+    ) -> None:
+        super().__init__(
+            timeout=timeout,
+            retries=retries,
+            backoff=backoff,
+            min_interval_seconds=min_interval_seconds,
+        )
         self.app_id = os.getenv("ADZUNA_APP_ID")
         self.api_key = os.getenv("ADZUNA_API_KEY")
+        self.results_per_page = (
+            results_per_page
+            if results_per_page is not None
+            else type(self).results_per_page
+        )
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
@@ -52,10 +74,19 @@ class AdzunaProvider(JobProvider):
             if key in kwargs:
                 params[key] = kwargs[key]
 
+        logger.info(
+            "job search role=%r location=%s provider=adzuna results_per_page=%d",
+            role,
+            location,
+            params["results_per_page"],
+        )
         data = self._get_json(
             url, params=params, headers={"Accept": "application/json"}
         )
         jobs, discarded = self._map_items(data.get("results", []))
+        logger.debug(
+            "adzuna mapped jobs=%d discarded=%d", len(jobs), len(discarded)
+        )
         return ProviderSearchResult(
             provider=self.name, jobs=jobs, discarded_jobs=discarded
         )

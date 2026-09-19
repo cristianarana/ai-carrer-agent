@@ -16,6 +16,20 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+_SENSITIVE_KEYS = frozenset(
+    {"app_id", "app_key", "api_key", "key", "x-api-key", "authorization"}
+)
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    return int(raw) if raw else default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    return float(raw) if raw else default
+
 
 class _RateLimiter:
     def __init__(self) -> None:
@@ -64,11 +78,34 @@ class JobProvider(ABC):
     name: str
     base_url: str
     config_required: tuple[str, ...] = ()
-    timeout = 15
-    retries = 3
-    backoff = 1.0
-    min_interval_seconds = 0.0
+    timeout = _env_float("SEARCH_PROVIDER_TIMEOUT", 15.0)
+    retries = _env_int("SEARCH_PROVIDER_RETRIES", 3)
+    backoff = _env_float("SEARCH_PROVIDER_BACKOFF", 1.0)
+    min_interval_seconds = _env_float("SEARCH_PROVIDER_MIN_INTERVAL", 0.0)
     search_mode = "per_position"
+
+    def __init__(
+        self,
+        *,
+        timeout: float | None = None,
+        retries: int | None = None,
+        backoff: float | None = None,
+        min_interval_seconds: float | None = None,
+    ) -> None:
+        self.timeout = (
+            timeout if timeout is not None else type(self).timeout
+        )
+        self.retries = (
+            retries if retries is not None else type(self).retries
+        )
+        self.backoff = (
+            backoff if backoff is not None else type(self).backoff
+        )
+        self.min_interval_seconds = (
+            min_interval_seconds
+            if min_interval_seconds is not None
+            else type(self).min_interval_seconds
+        )
 
     def is_configured(self) -> bool:
         return all(os.getenv(key) for key in self.config_required)
@@ -106,12 +143,26 @@ class JobProvider(ABC):
     ) -> dict:
         for attempt in range(self.retries + 1):
             _wait_for_rate_limit(self.name, self.min_interval_seconds)
+            logger.debug(
+                "%s GET %s params=%s headers=%s",
+                self.name,
+                url,
+                self._redact(params) if params is not None else None,
+                self._redact(headers) if headers is not None else None,
+            )
             try:
                 response = requests.get(
                     url, params=params, headers=headers, timeout=self.timeout
                 )
                 response.raise_for_status()
-                return response.json()
+                data = response.json()
+                logger.debug(
+                    "%s GET %s -> 200 body_keys=%d",
+                    self.name,
+                    url,
+                    len(data) if isinstance(data, dict) else -1,
+                )
+                return data
             except (requests.Timeout, requests.ConnectionError) as e:
                 transient, status, cause = True, None, e
             except requests.HTTPError as e:
@@ -141,6 +192,13 @@ class JobProvider(ABC):
                 continue
             logger.error("%s API error: %s", self.name, cause)
             raise ProviderError(self.name, str(cause), status_code=status) from cause
+
+    @staticmethod
+    def _redact(mapping: dict) -> dict:
+        return {
+            key: ("<redacted>" if str(key).lower() in _SENSITIVE_KEYS else value)
+            for key, value in mapping.items()
+        }
 
     @staticmethod
     def _build_salary_range(

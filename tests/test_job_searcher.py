@@ -121,7 +121,8 @@ def test_outcome_returns_analysis_untouched():
     assert outcome.analysis is analysis
 
 
-def test_filters_jobs_below_threshold_and_sorts():
+def test_filters_jobs_below_threshold_and_sorts(monkeypatch):
+    monkeypatch.delenv("SEARCH_MIN_MATCH", raising=False)
     jobs = [_job("High A"), _job("Low"), _job("High B")]
     providers = [FakeProvider("fake_a", jobs)]
     scorer = MapScorer({"High A": 0.90, "Low": 0.80, "High B": 0.95})
@@ -131,6 +132,31 @@ def test_filters_jobs_below_threshold_and_sorts():
     titles = [m.job.title for m in outcome.matched_jobs]
     assert titles == ["High B", "High A"]
     assert all(m.match_score >= 0.85 for m in outcome.matched_jobs)
+
+
+def test_min_match_read_from_env(monkeypatch):
+    monkeypatch.setenv("SEARCH_MIN_MATCH", "0.5")
+    jobs = [_job("Low")]
+    providers = [FakeProvider("fake_a", jobs)]
+    scorer = MapScorer({"Low": 0.80})
+
+    outcome = JobSearcher(providers=providers, scorer=scorer).search(_analysis())
+
+    titles = [m.job.title for m in outcome.matched_jobs]
+    assert titles == ["Low"]
+
+
+def test_min_match_param_overrides_env(monkeypatch):
+    monkeypatch.setenv("SEARCH_MIN_MATCH", "0.99")
+    jobs = [_job("Low")]
+    providers = [FakeProvider("fake_a", jobs)]
+    scorer = MapScorer({"Low": 0.80})
+
+    outcome = JobSearcher(
+        providers=providers, scorer=scorer, min_match=0.5
+    ).search(_analysis())
+
+    assert [m.job.title for m in outcome.matched_jobs] == ["Low"]
 
 
 def test_match_score_rounded_to_three_decimals():
@@ -200,7 +226,7 @@ def test_keyword_scorer_rejects_unrelated_job():
     )
     provider = FakeProvider("fake_a", [job])
     with pytest.raises(NoMatchesError) as exc_info:
-        JobSearcher(providers=[provider]).search(_analysis())
+        JobSearcher(providers=[provider], min_match=0.95).search(_analysis())
     assert exc_info.value.reason == "none_above_threshold"
     assert exc_info.value.summary.total_jobs_found == 1
     assert exc_info.value.summary.total_matched_jobs == 0

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from core.config import load_settings
 from .errors import (
     AnalysisValidationError,
     EmptyResumeError,
@@ -20,21 +21,43 @@ logger = logging.getLogger(__name__)
 _PROMPT_TEMPLATE = Path(__file__).parent / "prompts" / "resume_analysis.txt"
 _REPAIR_TEMPLATE = Path(__file__).parent / "prompts" / "repair_analysis.txt"
 
-_REPAIR_MAX_PREVIOUS_CHARS = 4_000
-_REPAIR_MAX_ERRORS_CHARS = 4_000
-
 
 class CVAnalyzer:
     def __init__(
         self,
         provider: LLMProvider,
         *,
-        max_attempts: int = 3,
-        max_resume_chars: int = 60_000,
+        max_attempts: int | None = None,
+        max_resume_chars: int | None = None,
+        repair_max_previous_chars: int | None = None,
+        repair_max_errors_chars: int | None = None,
+        log_sample_chars: int | None = None,
     ) -> None:
+        settings = load_settings()
         self._provider = provider
-        self._max_attempts = max_attempts
-        self._max_resume_chars = max_resume_chars
+        self._max_attempts = (
+            max_attempts if max_attempts is not None else settings.analyzer_max_attempts
+        )
+        self._max_resume_chars = (
+            max_resume_chars
+            if max_resume_chars is not None
+            else settings.max_resume_chars
+        )
+        self._repair_max_previous_chars = (
+            repair_max_previous_chars
+            if repair_max_previous_chars is not None
+            else settings.analyzer_repair_max_previous_chars
+        )
+        self._repair_max_errors_chars = (
+            repair_max_errors_chars
+            if repair_max_errors_chars is not None
+            else settings.analyzer_repair_max_errors_chars
+        )
+        self._log_sample_chars = (
+            log_sample_chars
+            if log_sample_chars is not None
+            else settings.analyzer_log_sample_chars
+        )
 
     def analyze(self, resume_text: str) -> CVAnalysis:
         if not resume_text.strip() or not any(
@@ -64,6 +87,12 @@ class CVAnalyzer:
                 data = self._extract_json(previous_content)
                 analysis = CVAnalysis.model_validate(data)
                 CVAnalysisValidator.validate(analysis)
+                logger.info(
+                    "LLM analysis OK (attempt %d/%d) content_chars=%d",
+                    attempt + 1,
+                    self._max_attempts,
+                    len(previous_content),
+                )
                 return analysis
             except (InvalidJSONError, ValidationError, ValueError) as exc:
                 if isinstance(exc, InvalidJSONError):
@@ -75,7 +104,12 @@ class CVAnalyzer:
                     "LLM analysis failed, attempt %d/%d: %s",
                     attempt + 1,
                     self._max_attempts,
-                    formatted_errors[:300],
+                    formatted_errors[: self._log_sample_chars],
+                )
+                logger.debug(
+                    "LLM raw content (sample %d chars): %r",
+                    self._log_sample_chars,
+                    previous_content[: self._log_sample_chars],
                 )
 
         assert last_error is not None
@@ -86,12 +120,14 @@ class CVAnalyzer:
         template = _PROMPT_TEMPLATE.read_text(encoding="utf-8")
         return template.replace("{resume}", resume_text)
 
-    @classmethod
-    def _build_repair_prompt(cls, *, errors: str, previous_content: str) -> str:
+    def _build_repair_prompt(self, *, errors: str, previous_content: str) -> str:
         template = _REPAIR_TEMPLATE.read_text(encoding="utf-8")
         return (
-            template.replace("{errors}", errors[:_REPAIR_MAX_ERRORS_CHARS])
-            .replace("{previous_content}", previous_content[:_REPAIR_MAX_PREVIOUS_CHARS])
+            template.replace("{errors}", errors[: self._repair_max_errors_chars])
+            .replace(
+                "{previous_content}",
+                previous_content[: self._repair_max_previous_chars],
+            )
         )
 
     @staticmethod

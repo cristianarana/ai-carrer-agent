@@ -1,9 +1,12 @@
+import logging
 import re
 from html import unescape
 
 from ..interface.job_opportunity import JobOpportunity
 from ..interface.provider_result import ProviderSearchResult
 from .base_provider import JobProvider
+
+logger = logging.getLogger(__name__)
 
 
 class RemotiveProvider(JobProvider):
@@ -12,6 +15,21 @@ class RemotiveProvider(JobProvider):
     # Rate limit oficial: ~2 req/min (recomienda pocas consultas/día).
     # Los 429 se manejan como ProviderError no-transient (sin retry).
     search_mode = "profile"
+
+    def __init__(
+        self,
+        *,
+        timeout: float | None = None,
+        retries: int | None = None,
+        backoff: float | None = None,
+        min_interval_seconds: float | None = None,
+    ) -> None:
+        super().__init__(
+            timeout=timeout,
+            retries=retries,
+            backoff=backoff,
+            min_interval_seconds=min_interval_seconds,
+        )
 
     def search_jobs(
         self, role: str, location: str | None = None, **kwargs
@@ -23,8 +41,17 @@ class RemotiveProvider(JobProvider):
             if kwargs.get(key):
                 params[key] = str(kwargs[key])
 
+        logger.info(
+            "job search role=%r location=%s provider=remotive params=%s",
+            role,
+            location,
+            params,
+        )
         data = self._get_json(self.base_url, params=params)
         jobs, discarded = self._map_items(data.get("jobs", []))
+        logger.debug(
+            "remotive mapped jobs=%d discarded=%d", len(jobs), len(discarded)
+        )
         return ProviderSearchResult(
             provider=self.name, jobs=jobs, discarded_jobs=discarded
         )

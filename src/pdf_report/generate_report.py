@@ -5,24 +5,24 @@ BASE_DIR = Path(__file__).resolve().parent
 PAGES_DIR = BASE_DIR / "report_structure" / "pages"
 STYLE_DIR = BASE_DIR / "report_structure" / "style"
 
-_DEFAULT_COVER_TITLE = "Informe general de Curriculum"
+_DEFAULT_COVER_TITLE = "General Resume Report"
 
 _SCORE_LABELS = [
-    ("relevance_to_target_positions", "Relevancia para posiciones objetivo"),
-    ("technical_skills", "Habilidades técnicas"),
-    ("professional_experience", "Experiencia profesional"),
-    ("achievement_oriented_descriptions", "Descripciones orientadas a logros"),
-    ("ats_optimization", "Optimización ATS"),
-    ("clarity_and_structure", "Claridad y estructura"),
-    ("seniority_positioning", "Posicionamiento de seniority"),
+    ("relevance_to_target_positions", "Relevance to Target Positions"),
+    ("technical_skills", "Technical Skills"),
+    ("professional_experience", "Professional Experience"),
+    ("achievement_oriented_descriptions", "Achievement-Oriented Descriptions"),
+    ("ats_optimization", "ATS Optimization"),
+    ("clarity_and_structure", "Clarity and Structure"),
+    ("seniority_positioning", "Seniority Positioning"),
 ]
 
 _IMPROVEMENT_CATEGORIES = [
-    ("immediate_actions", "Acciones inmediatas"),
-    ("technical_enhancements", "Mejoras técnicas"),
-    ("ats_optimization", "Optimización ATS"),
-    ("professional_and_structural_improvements", "Mejoras profesionales y estructurales"),
-    ("long_term_improvements", "Mejoras a largo plazo"),
+    ("immediate_actions", "Immediate Actions"),
+    ("technical_enhancements", "Technical Enhancements"),
+    ("ats_optimization", "ATS Optimization"),
+    ("professional_and_structural_improvements", "Professional and Structural Improvements"),
+    ("long_term_improvements", "Long-Term Improvements"),
 ]
 
 

@@ -1,0 +1,14 @@
+.git
+.gitignore
+carreer-agent-env
+**/__pycache__
+**/*.pyc
+.pytest_cache
+requirements-dev.txt
+tests
+.env
+.env.example
+data-source
+reports
+src/logs
+*.log

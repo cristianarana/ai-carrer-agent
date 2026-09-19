@@ -49,6 +49,8 @@ Fix ONLY what the validation errors report. Keep every other field identical to 
 previous response.
 Do NOT invent experience, technologies, projects, or certifications not present in the
 candidate's resume.
+Write ALL report content entirely in ENGLISH, regardless of the language of the resume.
+Keep the candidate's name and professional title exactly as written in the resume.
 Return ONLY the corrected JSON object. Use the exact field names shown above.
 
 VALIDATION ERRORS:
