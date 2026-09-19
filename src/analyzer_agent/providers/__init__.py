@@ -1,4 +1,4 @@
 from .base import LLMProvider
-from .mistral import MistralProvider
+from .openrouter import OpenRouterProvider
 
-__all__ = ["LLMProvider", "MistralProvider"]
+__all__ = ["LLMProvider", "OpenRouterProvider"]

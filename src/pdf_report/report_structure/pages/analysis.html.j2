@@ -1,11 +1,11 @@
 <div class="analysis-page">
-  <h2 class="page-title">Análisis de Curriculum</h2>
+  <h2 class="page-title">Resume Analysis</h2>
 
   <section>
-    <h3 class="section-title">Mejores posiciones para tu perfil</h3>
+    <h3 class="section-title">Best-fit job positions for your profile</h3>
     <table class="report-table">
       <thead>
-        <tr><th style="width:6%">Rank</th><th style="width:24%">Posición</th><th>Explicación del match</th></tr>
+        <tr><th style="width:6%">Rank</th><th style="width:24%">Position</th><th>Match Explanation</th></tr>
       </thead>
       <tbody>
       {% for p in best_fit %}
@@ -20,13 +20,13 @@
   </section>
 
   <section>
-    <h3 class="section-title">Keywords para optimización ATS</h3>
+    <h3 class="section-title">Keywords for ATS Optimization</h3>
     <table class="report-table">
       <thead>
         <tr>
-          <th>Habilidades técnicas</th>
-          <th>Herramientas y tecnologías</th>
-          <th>Habilidades profesionales</th>
+          <th>Technical Skills</th>
+          <th>Tools &amp; Technologies</th>
+          <th>Professional Skills</th>
           <th>AI &amp; Data</th>
         </tr>
       </thead>
@@ -42,19 +42,19 @@
   </section>
 
   <section>
-    <h3 class="section-title">Test de los 10 segundos del reclutador</h3>
+    <h3 class="section-title">10-Second Recruiter Test</h3>
     <table class="report-table">
       <tbody>
         <tr>
-          <th style="width:30%">Positivo</th>
+          <th style="width:30%">Positive</th>
           <td><ul>{% for item in recruiter.positive %}<li>{{ item }}</li>{% endfor %}</ul></td>
         </tr>
         <tr>
-          <th>Confuso o débil</th>
+          <th>Unclear or Weak</th>
           <td><ul>{% for item in recruiter.unclear_or_weak %}<li>{{ item }}</li>{% endfor %}</ul></td>
         </tr>
         <tr>
-          <th>Podría causar rechazo</th>
+          <th>Could Cause Rejection</th>
           <td><ul>{% for item in recruiter.could_cause_rejection %}<li>{{ item }}</li>{% endfor %}</ul></td>
         </tr>
       </tbody>
@@ -62,7 +62,7 @@
   </section>
 
   <section>
-    <h3 class="section-title">Puntuación del Curriculum</h3>
+    <h3 class="section-title">Resume Score</h3>
     <p class="score-value">{{ score.overall_score }}/10</p>
     <p>{{ score.explanation }}</p>
     <table class="report-table">
@@ -81,7 +81,7 @@
   </section>
 
   <section>
-    <h3 class="section-title">Cómo llegar a la excelencia (10/10)</h3>
+    <h3 class="section-title">How to Reach Excellence (10/10)</h3>
     {% for items, label in improvements %}
       <h4 class="sub-section-title">{{ label }}</h4>
       <ul>

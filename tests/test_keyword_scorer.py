@@ -1,3 +1,5 @@
+import pytest
+
 from analyzer_agent.interfaces.ats_keywords import ATSKeywords
 from analyzer_agent.interfaces.job_position import JobPosition
 from job_search_agent.helper.keyword_scorer import KeywordScorer
@@ -90,3 +92,30 @@ def test_token_with_plus_and_dot():
 
 def test_rank_match_conserved():
     assert KeywordScorer._rank_match(_position(rank=10)) == 0.55
+
+
+def test_score_uses_injected_weights():
+    job = _job(title="python", description="base work")
+    kw = _keywords()
+    kw.technical_skills = ["python"]
+
+    only_keywords = KeywordScorer(keyword_weight=1.0, rank_weight=0.0)
+    assert only_keywords.score(job=job, position=_position(rank=10), keywords=kw) == 1.0
+
+    only_rank = KeywordScorer(keyword_weight=0.0, rank_weight=1.0)
+    assert only_rank.score(job=job, position=_position(rank=10), keywords=kw) == 0.55
+
+
+def test_rank_value_uses_max_rank():
+    scorer = KeywordScorer(max_rank=10, keyword_weight=0.0, rank_weight=1.0)
+    job = _job(description="generic")
+    kw = _keywords()
+    assert scorer.score(job=job, position=_position(rank=1), keywords=kw) == 1.0
+    assert scorer.score(job=job, position=_position(rank=6), keywords=kw) == 0.5
+
+
+def test_score_applies_rank_even_without_keyword_hits():
+    scorer = KeywordScorer(keyword_weight=0.5, rank_weight=0.5)
+    job = _job(description="generic")
+    kw = _keywords()
+    assert scorer.score(job=job, position=_position(rank=1), keywords=kw) == pytest.approx(0.5)

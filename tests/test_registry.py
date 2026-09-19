@@ -26,6 +26,25 @@ def test_get_provider_unknown():
         get_provider("nope")
 
 
+def test_build_providers_uses_injected_settings():
+    from core.config import Settings
+
+    settings = Settings(
+        adzuna_results_per_page=7,
+        open_ninja_num_pages=3,
+        search_provider_retries=5,
+        search_provider_timeout=2.0,
+    )
+    providers = build_providers(settings)
+    by_name = {p.name: p for p in providers}
+
+    assert by_name["adzuna"].results_per_page == 7
+    assert by_name["open_ninja"].num_pages == 3
+    for provider in providers:
+        assert provider.retries == 5
+        assert provider.timeout == 2.0
+
+
 def _opportunity(title):
     return JobOpportunity(
         title=title,

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor
 
+from core.config import Settings, load_settings
 from job_search_agent.errors import NoMatchesError
 from job_search_agent.helper import KeywordScorer, MatchScorer
 from job_search_agent.interface.job_match import (
@@ -12,15 +12,13 @@ from job_search_agent.interface.job_match import (
     JobSearchSummary,
 )
 from job_search_agent.interface.job_opportunity import JobOpportunity
-from job_search_agent.provider import get_providers, search_all
+from job_search_agent.provider import build_providers, search_all
 from job_search_agent.provider.base_provider import JobProvider
 
 logger = logging.getLogger(__name__)
 
 
 class JobSearcher:
-    MIN_MATCH = 0.85
-
     def __init__(
         self,
         providers: list[JobProvider] | None = None,
@@ -28,25 +26,37 @@ class JobSearcher:
         location: str | None = None,
         max_positions: int | None = None,
         max_workers: int | None = None,
+        min_match: float | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        self._providers = providers if providers is not None else get_providers()
-        self._scorer = scorer or KeywordScorer()
+        cfg = settings or load_settings()
+        self._settings = settings
+        self._providers = (
+            providers if providers is not None else build_providers(settings)
+        )
+        self._scorer = scorer or KeywordScorer(settings=settings)
         self._location = location
         self._max_positions = (
-            max_positions
-            if max_positions is not None
-            else int(os.getenv("SEARCH_TOP_N", "5"))
+            max_positions if max_positions is not None else cfg.search_top_n
         )
         self._max_workers = (
-            max_workers
-            if max_workers is not None
-            else int(os.getenv("SEARCH_MAX_WORKERS", "4"))
+            max_workers if max_workers is not None else cfg.search_max_workers
+        )
+        self._min_match = (
+            min_match if min_match is not None else cfg.search_min_match
         )
 
     def search(self, analysis) -> JobSearchOutcome:
         report = analysis.RECRUITMENT_REPORT
         keywords = report.ATS_KEYWORDS
         positions = report.BEST_FIT_JOB_POSITIONS[: self._max_positions]
+        logger.debug(
+            "Search roles=%d positions=%s min_match=%.3f providers=%s",
+            len(positions),
+            [p.position for p in positions],
+            self._min_match,
+            [p.name for p in self._providers],
+        )
         outcome = JobSearchOutcome(analysis=analysis)
         seen: set[tuple[str, str, str]] = set()
 
@@ -97,6 +107,15 @@ class JobSearcher:
 
         outcome.matched_jobs.sort(key=lambda m: m.match_score, reverse=True)
         outcome.summary = self._build_summary(outcome)
+        logger.info(
+            "Search summary: roles=%d jobs_found=%d matched=%d "
+            "failed_providers=%s skipped=%s",
+            len(outcome.searches),
+            outcome.summary.total_jobs_found,
+            outcome.summary.total_matched_jobs,
+            outcome.summary.failed_providers or [],
+            list(outcome.summary.skipped_providers) or [],
+        )
 
         if not outcome.matched_jobs:
             reason = (
@@ -136,7 +155,15 @@ class JobSearcher:
         score = self._scorer.score(
             job=job, position=position, keywords=keywords
         )
-        if score >= self.MIN_MATCH:
+        logger.debug(
+            "match scan role=%s job=%r provider=%s location=%s score=%.3f",
+            position.position,
+            job.title,
+            job.source_provider,
+            job.location,
+            score,
+        )
+        if score >= self._min_match:
             outcome.matched_jobs.append(
                 JobMatch(
                     job=job,
@@ -163,9 +190,14 @@ class JobSearcher:
             score = self._scorer.score(
                 job=job, position=position, keywords=keywords
             )
-            if score >= self.MIN_MATCH and (
-                best is None or score > best[0]
-            ):
+            logger.debug(
+                "match scan (best) role=%s job=%r provider=%s score=%.3f",
+                position.position,
+                job.title,
+                job.source_provider,
+                score,
+            )
+            if score >= self._min_match and (best is None or score > best[0]):
                 best = (score, position)
         if best is not None:
             outcome.matched_jobs.append(

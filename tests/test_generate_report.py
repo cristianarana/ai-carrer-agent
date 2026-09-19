@@ -122,8 +122,8 @@ def test_generate_report_basic_structure(tmp_path):
     pages = _pdf_text(out)
     assert len(pages) >= 4
     assert "Cristian Arana" in pages[0]
-    assert "Análisis de Curriculum" in pages[1]
-    assert "Analizador de mercado laboral" in pages[-1]
+    assert "Resume Analysis" in pages[1]
+    assert "Job Market Analysis" in pages[-1]
 
 
 def test_generate_report_cover_fallback_when_title_missing(tmp_path):
@@ -136,7 +136,7 @@ def test_generate_report_cover_fallback_when_title_missing(tmp_path):
     )
 
     pages = _pdf_text(out)
-    assert "Informe general de Curriculum" in pages[0]
+    assert "General Resume Report" in pages[0]
     assert "Position 0" in pages[0]
 
 
@@ -150,8 +150,8 @@ def test_generate_report_cover_fallback_when_both_missing(tmp_path):
     )
 
     pages = _pdf_text(out)
-    assert "Informe general de Curriculum" in pages[0]
-    assert "Análisis de Curriculum" in pages[1]
+    assert "General Resume Report" in pages[0]
+    assert "Resume Analysis" in pages[1]
 
 
 def test_generate_report_job_table_columns(tmp_path):
@@ -164,7 +164,7 @@ def test_generate_report_job_table_columns(tmp_path):
     )
 
     last = " ".join((_pdf_text(out)[-1] or "").split())
-    for expected in ("Posición objetivo", "Empresa", "Ubicación", "Match", "Postular"):
+    for expected in ("Job Title", "Company", "Location", "Source", "Apply Link"):
         assert expected in last
     assert "Acme Corp" in last
     assert "remotive" in last

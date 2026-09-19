@@ -1,11 +1,12 @@
 import argparse
-import logging
 from pathlib import Path
 
 from .cv_analyzer import CVAnalyzer
-from .providers import MistralProvider
+from .providers import OpenRouterProvider
+from core.config import load_settings
+from core.logging import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging(level=load_settings().log_level)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -15,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("resume", type=Path, help="Path to the CV file")
     args = parser.parse_args(argv)
 
-    analysis = CVAnalyzer(provider=MistralProvider()).analyze(
+    analysis = CVAnalyzer(provider=OpenRouterProvider()).analyze(
         args.resume.read_text(encoding="utf-8")
     )
     print(analysis.model_dump_json(indent=2))
